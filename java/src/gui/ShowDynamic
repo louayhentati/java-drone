@@ -1,0 +1,629 @@
+package gui;
+
+import API.api;
+import javafx.animation.PauseTransition;
+import javafx.application.Platform;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.stage.*;
+import javafx.util.Duration;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.json.JSONTokener;
+
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static Animation.LoadingTask.showLoadingPopup;
+import static Animation.LoadingTask.showLoadingPopup2;
+import static gui.DroneDynamicsApp.*;
+import static gui.DroneSimulatorGUI.*;
+
+/**
+ * The ShowDynamic class manages the display of real-time drone dynamics information.
+ * It includes functionalities for searching, displaying details, and navigating through drone data.
+ * Responsibilities:
+ * - Displays real-time drone dynamics information in a scrollable layout.
+ * - Supports searching and filtering drone IDs.
+ * - Provides navigation controls (Next, Previous, Last) to browse through data pages.
+ * - Handles refreshing of drone data and updating UI accordingly.
+ * - Creates a dashboard toolbar with navigation and refresh options.
+ * - Displays drone details including ID, status, battery, speed, and location.
+ * - Provides a link to open drone location on Google Maps.
+ */
+
+
+public class ShowDynamic {
+    private Map<String, DroneDynamicsApp.DroneDynamics> droneDataMap;
+    private Label idLabel;
+    private Label timeLabel;
+    private Label statusLabel;
+    private Label batteryLabel;
+    private Label speedLabel;
+    private Label yawLabel;
+    private Label pitchLabel;
+    private Label rollLabel;
+    private Label longitudeLabel;
+    private Label latitudeLabel;
+    private Label timestampLabel;
+    private Label lastSeenLabel;
+    private int offset = 0;
+    private static final int LIMIT = 10;
+    private static final int MAX_OFFSET = 2880;
+    private ChoiceBox<String> choiceBox;
+    private ChoiceBox<Integer> numberChoiceBox;
+    private Hyperlink googleMapsLink;
+    private static int totalDrones = 0;
+    private ImageView droneImageView;
+    private List<String> allDroneIDs;
+    private CompletableFuture<Void> currentFetchTask;
+    private final AtomicBoolean cancelFetch = new AtomicBoolean(false);
+    ObservableList<String> droneIds = FXCollections.observableArrayList();
+
+    public ShowDynamic() {
+        // Initialize all drone IDs from 1 to 2881
+        allDroneIDs = new ArrayList<>();
+        for (int i = 1; i <= 2881; i++) {
+            allDroneIDs.add(String.valueOf(i));
+        }
+    }
+    public void showDynamicPage(Stage primaryStage) {
+        primaryStage.setTitle("Drone Dynamics Information");
+
+        droneDataMap = new HashMap<>();
+        VBox dashboard = createDashboardDynamic(primaryStage);
+
+        TextField searchField = new TextField();
+        searchField.setPromptText("Search Drone ID");
+        searchField.setPrefWidth(50);
+        searchField.textProperty().addListener((observable, oldValue, newValue) -> filterDroneIDs(newValue));
+
+        choiceBox = new ChoiceBox<>();
+        choiceBox.setPrefWidth(200);
+        choiceBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue != null && !newValue.isEmpty()) {
+                showDroneDetails(newValue);
+            }
+
+        });
+
+        // Populate the choiceBox with IDs from 1 to 2881
+        for (int i = 1; i <= 2881; i++) {
+            choiceBox.getItems().add(String.valueOf(i));
+        }
+        choiceBox.setItems(FXCollections.observableArrayList(allDroneIDs));
+
+        numberChoiceBox = new ChoiceBox<>();
+        ObservableList<Integer> numbers = FXCollections.observableArrayList();
+        for (int i = 1; i <= 30; i++) {
+            numbers.add(i);
+        }
+        numberChoiceBox.setItems(numbers);
+        numberChoiceBox.setValue(1);
+        numberChoiceBox.setPrefWidth(100);
+        numberChoiceBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue != null) {
+                choiceBox.getItems().clear();
+                droneDataMap.clear();
+                // Cancel ongoing fetch operation
+                if (currentFetchTask != null) {
+                    cancelFetch.set(true);
+                }
+                choiceBox.getItems().clear();
+                totalDrones = 0;
+                offset = 0;
+                try {
+                        refreshDroneData(newValue, offset, true);
+                        //showLoadingPopup2();
+
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
+
+        VBox droneDetails = new VBox(20);
+        droneDetails.setPadding(new Insets(20));
+        droneDetails.setAlignment(Pos.BASELINE_LEFT);
+
+        droneImageView = new ImageView();
+        droneImageView.setFitWidth(500);
+        droneImageView.setFitHeight(500);
+        droneImageView.setPreserveRatio(true);
+
+        VBox detailsBox = new VBox(10);
+
+        idLabel = createIconLabel("/image/id.png", "Drone ID: ");
+        timeLabel = createIconLabel("/image/time.png", "Time: ");
+        statusLabel = createIconLabel("/image/status.png", "Status: ");
+        batteryLabel = createIconLabel("/image/battery.png", "Battery: ");
+        speedLabel = createIconLabel("/image/speed.png", "Speed: ");
+        yawLabel = createIconLabel("/image/yaw.png", "Yaw: ");
+        pitchLabel = createIconLabel("/image/pitch.png", "Pitch: ");
+        rollLabel = createIconLabel("/image/roll.png", "Roll: ");
+        longitudeLabel = createIconLabel("/image/longitude.png", "Longitude: ");
+        latitudeLabel = createIconLabel("/image/latitude.png", "Latitude: ");
+        timestampLabel = createIconLabel("/image/timestamp.png", "Timestamp: ");
+        lastSeenLabel = createIconLabel("/image/timestamp.png", "Last Seen: ");
+        Label googleMapsLabel = createIconLabel("/image/google-maps.png", "Open in Maps to see the Location: ");
+        googleMapsLink = new Hyperlink();
+        googleMapsLink.setOnAction(_ -> {
+            String url = googleMapsLink.getText();
+            if (!url.isEmpty()) {
+                try {
+                    DroneSimulatorGUI.getHostServicesInstance().showDocument(url);
+                } catch (IllegalStateException e) {
+                    System.err.println("HostServices not initialized: " + e.getMessage());
+                }
+            }
+        });
+
+        detailsBox.getChildren().addAll(idLabel, timeLabel, statusLabel, batteryLabel, speedLabel, yawLabel, pitchLabel, rollLabel, longitudeLabel, latitudeLabel, timestampLabel, lastSeenLabel, googleMapsLabel, googleMapsLink);
+
+        HBox combinedBox = new HBox(20, detailsBox, droneImageView);
+        combinedBox.setAlignment(Pos.CENTER_LEFT);
+
+        droneDetails.getChildren().add(combinedBox);
+
+        ScrollPane scrollPane = new ScrollPane(droneDetails);
+        scrollPane.setFitToWidth(true);
+
+        Button btnRefresh = new Button("Refresh");
+        btnRefresh.setOnAction(_ -> {
+            try {
+                refreshDroneData(numberChoiceBox.getValue(), offset, false); // Do not reset choice box
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+
+        Button btnNext = new Button("Next");
+        btnNext.setOnAction(e -> {
+            if (offset + LIMIT <= MAX_OFFSET) {
+                offset += LIMIT;
+                try {
+                    refreshDroneData(numberChoiceBox.getValue(), offset, true);// Reset choice box
+                    showLoadingPopup2();
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }else {System.out.println("Invalid credentials");
+                showAutoClosingErrorPopup(primaryStage, "This is already the Last page", "ERROR", " Please try other page.");
+               }
+        });
+
+        Button btnPrevious = new Button("Previous");
+        btnPrevious.setOnAction(e -> {
+            if (offset - LIMIT >= 0) {
+                offset -= LIMIT;
+                try {
+                    if (totalDrones==2881){totalDrones-=11;}
+                    else totalDrones -= 20;
+                    refreshDroneData(numberChoiceBox.getValue(), offset, true); // Reset choice box
+                    showLoadingPopup2();
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }else {System.out.println("Invalid credentials");
+                showAutoClosingErrorPopup(primaryStage, "This is already the first page", "ERROR", " Please try other page.");
+            }
+        });
+
+        Button btnLast = new Button("Last");
+        btnLast.setOnAction(e -> {
+            offset = 2880;
+            totalDrones=2880;
+            try {
+                refreshDroneData(numberChoiceBox.getValue(), offset, true);
+                showLoadingPopup2();
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        });
+
+        HBox nextButtonBox = new HBox(10, btnPrevious, btnNext, btnLast);
+        nextButtonBox.setAlignment(Pos.BOTTOM_LEFT);
+        nextButtonBox.setPadding(new Insets(20));
+
+        VBox mainLayout = new VBox(10, dashboard, searchField, choiceBox, numberChoiceBox, scrollPane, nextButtonBox);
+        mainLayout.setSpacing(10);
+        mainLayout.setPadding(new Insets(10));
+
+        ScrollPane mainScrollPane = new ScrollPane(mainLayout);
+        mainScrollPane.setFitToWidth(true);
+
+        BorderPane root = new BorderPane();
+        root.setCenter(mainScrollPane);
+
+        Scene dynamicScene = new Scene(root, 1300, 1200);
+        primaryStage.centerOnScreen();
+        primaryStage.setScene(dynamicScene);
+        primaryStage.show();
+
+        //loadDroneDataFromJson();
+
+        // If droneDataMap is empty, fetch data from API
+
+        try {
+            refreshDroneData(numberChoiceBox.getValue(), offset, true);
+            //showLoadingPopup2();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+    static void showAutoClosingErrorPopup(Stage primaryStage, String title, String headerText, String contentText) {
+        Popup popup = new Popup();
+        popup.setAutoHide(true);
+
+        VBox popupContent = new VBox(10);
+        popupContent.setStyle("-fx-background-color: white; -fx-padding: 10; -fx-border-color: black; -fx-border-width: 1;");
+        popupContent.setAlignment(Pos.CENTER);
+
+        Label lblTitle = new Label(title);
+        lblTitle.setStyle("-fx-font-weight: bold;");
+
+        Label lblHeader = new Label(headerText);
+        lblHeader.setStyle("-fx-text-fill: red;");
+
+        Label lblContent = new Label(contentText);
+
+        popupContent.getChildren().addAll(lblTitle, lblHeader, lblContent);
+        popup.getContent().add(popupContent);
+
+        // Show the popup in the center of the primary stage
+        popup.show(primaryStage);
+
+        // Close the popup after 1 second
+        PauseTransition delay = new PauseTransition(Duration.seconds(1));
+        delay.setOnFinished(event -> popup.hide());
+        delay.play();
+    }
+
+    private VBox createDashboardDynamic(Stage primaryStage) {
+        Button btnMenu = createToolbarButton("Menu", "menu.png");
+        VBox menuItemsBox = new VBox(10);
+        menuItemsBox.setVisible(false);
+
+        btnMenu.setOnAction(event -> menuItemsBox.setVisible(!menuItemsBox.isVisible()));
+
+        Button btnLogout = createToolbarButton("Logout", "logout.png");
+        btnLogout.setOnAction(_ -> showLoginPage(primaryStage));
+
+        Button btnRefresh = createToolbarButton("Refresh", "refresh.png");
+        btnRefresh.setOnAction(_ -> {
+            showLoadingPopup();
+            try {
+                refreshDroneData(numberChoiceBox.getValue(), offset, true);
+                showDynamicPage(primaryStage);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+
+
+        Button btnBack = createToolbarButton("back", "back.png");
+        btnBack.setOnAction(_ -> {
+            totalDrones = 0;
+            primaryStage.centerOnScreen();
+            showMenu(primaryStage);
+        });
+
+        Button btnGame = createToolbarButton("Game", "game.png");
+        btnGame.setOnAction(e -> {
+            startGame(primaryStage);
+            primaryStage.centerOnScreen();
+        });
+
+        HBox hbox = new HBox(btnMenu, btnLogout, btnRefresh, btnBack,btnGame);
+        hbox.setAlignment(Pos.CENTER);
+        hbox.setSpacing(150);
+        hbox.setPadding(new Insets(5));
+
+        ToolBar toolbar = new ToolBar();
+        toolbar.setBackground(new Background(new BackgroundFill(Color.LIGHTBLUE, CornerRadii.EMPTY, Insets.EMPTY)));
+        toolbar.getItems().add(hbox);
+        toolbar.setOpacity(1.0);
+
+        menuItemsBox.getChildren().addAll(
+                createSubButton("Drone Flight Dynamic", primaryStage, _ -> new ShowDynamic().showDynamicPage(primaryStage)),
+                createSubButton("Drone Catalogue", primaryStage, event -> new ShowCatalogue().showCataloguePage(primaryStage)),
+                createSubButton("Drone History", primaryStage, event -> new ShowHistory().showHistoryPage(primaryStage))
+        );
+
+
+        VBox vbox = new VBox(toolbar, menuItemsBox);
+        vbox.setSpacing(0);
+
+        return vbox;
+    }
+
+    private void showDroneDetails(String droneId) {
+        if (droneDataMap.containsKey(droneId)) {
+        DroneDynamicsApp.DroneDynamics drone = droneDataMap.get(droneId);
+        if (drone != null) {
+            idLabel.setText("Drone ID: " + drone.getDrone());
+            timeLabel.setText("Time Stamp: " + drone.getTimestamp());
+            statusLabel.setText("Status: " + drone.getStatus());
+            batteryLabel.setText("Battery: " + drone.getBatteryStatus()+ "%");
+            speedLabel.setText("Speed: " + drone.getSpeed() + " Km/h");
+            yawLabel.setText("Yaw: " + drone.getAlignYaw());
+            pitchLabel.setText("Pitch: " + drone.getAlignPitch());
+            rollLabel.setText("Roll: " + drone.getAlignRoll());
+            longitudeLabel.setText("Longitude: " + drone.getLongitude());
+            latitudeLabel.setText("Latitude: " + drone.getLatitude());
+            timestampLabel.setText("Timestamp: " + drone.getTimestamp());
+            lastSeenLabel.setText("Last Seen: " + drone.getLastSeen());
+
+            String latitude = String.valueOf(drone.getLatitude());
+            String longitude = String.valueOf(drone.getLongitude());
+            String googleMapsUrl = String.format("https://www.google.com/maps/search/?api=1&query=%s,%s", latitude, longitude);
+            googleMapsLink.setText(googleMapsUrl);
+
+            String batteryImagePath = getBatteryImagePath(drone.getBatteryStatus());
+            Image batteryImage = new Image(Objects.requireNonNull(getClass().getResourceAsStream(batteryImagePath)));
+            ImageView batteryImageView = new ImageView(batteryImage);
+            batteryImageView.setFitWidth(50);
+            batteryImageView.setFitHeight(50);
+            batteryImageView.setPreserveRatio(true);
+            batteryLabel.setGraphic(batteryImageView);
+
+            String imagePath = "/imagedrone/" + drone.getDrone() + ".png";
+            Image droneImage = new Image(Objects.requireNonNull(getClass().getResourceAsStream(imagePath)));
+            droneImageView.setImage(droneImage);
+        }
+    }
+        }
+
+    private void filterDroneIDs(String searchText) {
+        if (searchText.isEmpty()) {
+            choiceBox.setItems(FXCollections.observableArrayList(allDroneIDs));
+        } else {
+            List<String> filteredIDs = new ArrayList<>();
+            for (String id : allDroneIDs) {
+                if (id.toLowerCase().contains(searchText.toLowerCase())) {
+                    filteredIDs.add(id);
+                }
+            }
+            choiceBox.setItems(FXCollections.observableArrayList(filteredIDs));
+        }
+    }
+
+
+    private Label createIconLabel(String iconFileName, String text) {
+        Image icon = new Image(Objects.requireNonNull(getClass().getResourceAsStream(iconFileName)));
+        ImageView iconView = new ImageView(icon);
+        Label label = new Label(text, iconView);
+        iconView.setFitWidth(50);
+        iconView.setFitHeight(50);
+        iconView.setPreserveRatio(true);
+        iconView.setSmooth(true);
+        label.setContentDisplay(ContentDisplay.LEFT);
+        return label;
+    }
+/*   if save Data json work than this
+    private void refreshDroneData(int numberOfDrones, int offset, boolean resetChoiceBox) throws IOException {
+        if (droneDataMap.isEmpty()) {  // Cancel ongoing fetch operation
+            if (currentFetchTask != null) {
+                cancelFetch.set(true);
+            }
+            // Clear previous drone data
+            droneDataMap.clear();
+            choiceBox.getItems().clear();
+            // Start new fetch operation
+            currentFetchTask = CompletableFuture.runAsync(() -> {
+                try {
+                    fetchAndProcessData(numberOfDrones, offset, resetChoiceBox);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } finally {
+                    cancelFetch.set(false);
+                }
+            });
+        }else {
+            // If not empty, update UI with existing data
+            Platform.runLater(() -> {
+                choiceBox.getItems().addAll(droneDataMap.keySet());
+                // Optionally, update UI with the first drone's details
+                if (!droneDataMap.isEmpty()) {
+                    showDroneDetails(droneDataMap.keySet().iterator().next());
+                }
+            });
+        }
+    }
+*/
+
+    private void refreshDroneData(int numberOfDrones, int offset, boolean resetChoiceBox) throws IOException {
+        // Cancel ongoing fetch operation
+        if (currentFetchTask != null) {
+            cancelFetch.set(true);
+        }
+
+        // Clear previous drone data
+        droneDataMap.clear();
+        choiceBox.getItems().clear();
+
+        // Start new fetch operation
+        currentFetchTask = CompletableFuture.runAsync(() -> {
+            try {
+                fetchAndProcessData(numberOfDrones, offset, resetChoiceBox);
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                cancelFetch.set(false);
+            }
+        });
+    }
+
+    private void fetchAndProcessData(int number, int offset, boolean resetChoiceBox) throws IOException {
+        String endpoint = "/api/" + number + "/dynamics/";
+        String domain = "http://dronesim.facets-labs.com";
+        String token = "Token 40a9557fac747f55c11ad20c85caac1d43654911";
+        String agent = "Louay";
+
+        api myApi = new api(endpoint, domain, token, agent);
+        myApi.createConnection(endpoint + "?limit="+LIMIT + "&offset=" + offset);
+        String response = myApi.retrieveResponse();
+
+        JSONArray drones = new JSONObject(response).getJSONArray("results");
+        for (int i = 0; i < drones.length(); i++) {
+            JSONObject droneJson = drones.getJSONObject(i);
+            int id = id(droneJson.getString("drone"));
+            int Battery = DroneDynamicsApp.Battery(droneJson.getString("drone"), droneJson.getInt("battery_status"));
+
+            DroneDynamicsApp.DroneDynamics droneDynamics = new DroneDynamicsApp.DroneDynamics(
+                    id,
+                    droneJson.getString("timestamp"),
+                    droneJson.getInt("speed"),
+                    droneJson.getDouble("align_roll"),
+                    droneJson.getDouble("align_pitch"),
+                    droneJson.getDouble("align_yaw"),
+                    droneJson.getDouble("longitude"),
+                    droneJson.getDouble("latitude"),
+                    Battery,
+                    droneJson.getString("last_seen"),
+                    droneJson.getString("status")
+            );
+
+            if (resetChoiceBox) {
+                int droneNumber = totalDrones + i + 1;
+                choiceBox.getItems().clear();
+                choiceBox.getItems().addAll(droneDataMap.keySet());
+            }
+
+            String droneNumber = String.valueOf(totalDrones + i + 1);
+            droneDataMap.put(droneNumber, droneDynamics);
+        }
+        saveDataToJsonFile("droneData.json");
+        totalDrones += drones.length();
+    }
+
+    private void saveDataToJsonFile(String fileName) {
+        // Read existing data from the file, if any
+        JSONArray existingJsonArray = new JSONArray();
+        try (FileReader fileReader = new FileReader(fileName)) {
+            JSONTokener tokener = new JSONTokener(fileReader);
+            existingJsonArray = new JSONArray(tokener);
+        } catch (IOException e) {
+            // File doesn't exist or unable to read, continue with an empty array
+            e.printStackTrace();
+        }
+
+        // Create a new JSONArray to store combined data
+        JSONArray combinedJsonArray = new JSONArray();
+
+        // Add existing data from file to combinedJsonArray
+        for (int i = 0; i < existingJsonArray.length(); i++) {
+            combinedJsonArray.put(existingJsonArray.getJSONObject(i));
+        }
+
+        // Add new data from droneDataMap to combinedJsonArray
+        for (DroneDynamics drone : droneDataMap.values()) {
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("droneId", drone.getDrone());
+            jsonObject.put("timestamp", drone.getTimestamp());
+            jsonObject.put("status", drone.getStatus());
+            jsonObject.put("batteryStatus", drone.getBatteryStatus());
+            jsonObject.put("speed", drone.getSpeed());
+            jsonObject.put("yaw", drone.getAlignYaw());
+            jsonObject.put("pitch", drone.getAlignPitch());
+            jsonObject.put("roll", drone.getAlignRoll());
+            jsonObject.put("longitude", drone.getLongitude());
+            jsonObject.put("latitude", drone.getLatitude());
+            jsonObject.put("lastSeen", drone.getLastSeen());
+
+            combinedJsonArray.put(jsonObject);
+        }
+
+        // Write combinedJsonArray to the file
+        try (FileWriter fileWriter = new FileWriter(fileName)) {
+            combinedJsonArray.write(fileWriter);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    public static Button createSubButton(String text, Stage primaryStage, SubButtonActionHandler actionHandler) {
+        Button button = new Button(text);
+        button.setStyle("-fx-background-color: lightblue; -fx-border-color: black; -fx-text-fill: black; -fx-font-size: 14px;");
+        button.setPadding(new Insets(0)); // Add padding inside the button
+        button.setMaxWidth(150); // Make the button stretch to fill width
+        totalDrones=0;
+        button.setOnAction(_ -> {
+            try {
+                actionHandler.handle(primaryStage);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        return button;
+    }
+    private String getBatteryImagePath(int batteryStatus) {
+        if (batteryStatus >= 80) {
+            return "/image/battery1.png";
+        } else if (batteryStatus >= 50) {
+            return "/image/battery2.png";
+        } else if (batteryStatus >= 20) {
+            return "/image/battery3.png";
+        } else if (batteryStatus >= 10) {
+            return "/image/battery4.png";
+        } else {
+            return "/image/battery5.png";
+        }
+    }
+
+    private void loadDroneDataFromJson() {
+        File file = new File("droneData.json");
+        if (file.exists()) {
+            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+                StringBuilder jsonContent = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    jsonContent.append(line);
+                }
+
+                JSONArray jsonArray = new JSONArray(jsonContent.toString());
+                for (int i = 0; i < jsonArray.length(); i++) {
+                    JSONObject jsonObject = jsonArray.getJSONObject(i);
+                    int id = jsonObject.getInt("droneId");
+
+                    // Populate droneDataMap with parsed data
+                    DroneDynamicsApp.DroneDynamics droneDynamics = new DroneDynamicsApp.DroneDynamics(
+                            id,
+                            jsonObject.getString("timestamp"),
+                            jsonObject.getInt("speed"),
+                            jsonObject.getInt("roll"),
+                            jsonObject.getInt("pitch"),
+                            jsonObject.getInt("yaw"),
+                            jsonObject.getDouble("longitude"),
+                            jsonObject.getDouble("latitude"),
+                            jsonObject.getInt("batteryStatus"),
+                            jsonObject.getString("lastSeen"),
+                            jsonObject.getString("status")
+                    );
+
+                    String droneNumber = String.valueOf(i + 1); // Adjust as per your data structure
+                    droneDataMap.put(droneNumber, droneDynamics);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
+
+}

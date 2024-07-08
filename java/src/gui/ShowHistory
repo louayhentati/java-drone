@@ -1,0 +1,311 @@
+package gui;
+
+import API.api;
+import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
+import javafx.scene.control.ToolBar;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.stage.Stage;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.IOException;
+import static Animation.LoadingTask.showLoadingPopup;
+import static gui.DroneSimulatorGUI.*;
+import static gui.ShowDynamic.showAutoClosingErrorPopup;
+
+/**
+ * The ShowHistory class manages the display of historical drone data.
+ * It includes functionalities for browsing through paginated drone data,
+ * displaying detailed information, and navigating between pages.
+ * Responsibilities:
+ *     Displays historical drone data in a tabular format.
+ *     Supports pagination with navigation controls (Next, Previous, Last) to browse through data pages.
+ *     Handles refreshing of drone data and updating the UI accordingly.
+ *     Creates a dashboard toolbar with navigation, menu, logout, and refresh options.
+ *     Displays drone details including ID, drone type, manufacturer, created date, serial number, carriage weight, and carriage type.
+ */
+
+public class ShowHistory {
+    private int offset = 0;
+    private static final int LIMIT = 10;
+    private static final int MAX_OFFSET = 20;
+    ObservableList<DroneApp.Drone> lastAddedItems = null;
+    void showHistoryPage(Stage primaryStage) throws IOException {
+        VBox daschbord = createDashboardHistory(primaryStage);
+
+        TableView<DroneApp.Drone> table = new TableView<>();
+
+        TableColumn<DroneApp.Drone, Integer> idColumn = new TableColumn<>("ID");
+        idColumn.setCellValueFactory(new PropertyValueFactory<>("id"));
+
+        TableColumn<DroneApp.Drone, String> dronetypeColumn = new TableColumn<>("Drone Type");
+        dronetypeColumn.setCellValueFactory(new PropertyValueFactory<>("dronetype"));
+
+        TableColumn<DroneApp.Drone, String> dronemanufacturerColumn = new TableColumn<>("Drone Manufacturer");
+        dronemanufacturerColumn.setCellValueFactory(new PropertyValueFactory<>("manufacturer"));
+
+        TableColumn<DroneApp.Drone, String> createdColumn = new TableColumn<>("Created");
+        createdColumn.setCellValueFactory(new PropertyValueFactory<>("created"));
+
+        TableColumn<DroneApp.Drone, String> serialnumberColumn = new TableColumn<>("Serial Number");
+        serialnumberColumn.setCellValueFactory(new PropertyValueFactory<>("serialnumber"));
+
+        TableColumn<DroneApp.Drone, Integer> carriageWeightColumn = new TableColumn<>("Carriage Weight");
+        carriageWeightColumn.setCellValueFactory(new PropertyValueFactory<>("carriageWeight"));
+
+        TableColumn<DroneApp.Drone, String> carriageTypeColumn = new TableColumn<>("Carriage Type");
+        carriageTypeColumn.setCellValueFactory(new PropertyValueFactory<>("carriageType"));
+
+        table.getColumns().addAll(idColumn, dronetypeColumn, dronemanufacturerColumn, createdColumn, serialnumberColumn, carriageWeightColumn, carriageTypeColumn);
+
+
+        // Parse the JSON data and add to the table
+        String endpoint = "/api/drone/";
+        String domain = "http://dronesim.facets-labs.com";
+        String token = "Token 40a9557fac747f55c11ad20c85caac1d43654911";
+        String agent = "Louay";
+
+        api myApi3 = new api(endpoint, domain, token, agent);
+
+        myApi3.createConnection("/api/drones/?limit=10"+ "&offset=" + offset);
+        String response3 = myApi3.retrieveResponse();
+
+        JSONArray drones = new JSONObject(response3).getJSONArray("results");
+
+        for (int i = 0; i < drones.length(); i++) {
+            JSONObject drone = drones.getJSONObject(i);
+            String dronetypeUrl = drone.getString("dronetype");
+            String dronetypeName = DroneApp.NameDrone(dronetypeUrl);
+            String dronemanufacturer = DroneApp.manufacturerDrone(dronetypeUrl);
+            table.getItems().add(new DroneApp.Drone(
+                    drone.getInt("id"),
+                    dronetypeName,
+                    dronemanufacturer,
+                    drone.getString("created"),
+                    drone.getString("serialnumber"),
+                    drone.getInt("carriage_weight"),
+                    drone.getString("carriage_type")));
+        }
+
+
+
+
+        idColumn.setPrefWidth(50);
+        dronetypeColumn.setPrefWidth(200);
+        dronemanufacturerColumn.setPrefWidth(200);
+        createdColumn.setPrefWidth(200);
+        serialnumberColumn.setPrefWidth(250);
+        carriageWeightColumn.setPrefWidth(100);
+        carriageTypeColumn.setPrefWidth(150);
+
+
+        table.setPrefHeight(275);
+        Button btnNext = new Button("Next");
+        btnNext.setOnAction(e -> {
+            if (offset + LIMIT <= MAX_OFFSET) {
+                try {
+                    table.setPrefHeight(700); // +30 for header and padding
+                    offset += LIMIT;
+                    api myApi2 = new api(endpoint, domain, token, agent);
+
+                    myApi3.createConnection("/api/drones/?limit=10"+ "&offset=" + offset);
+                    String response2 = myApi3.retrieveResponse();
+
+                    JSONArray drones1 = new JSONObject(response2).getJSONArray("results");
+
+                    for (int i = 0; i < drones1.length(); i++) {
+                        JSONObject drone = drones1.getJSONObject(i);
+                        String dronetypeUrl = drone.getString("dronetype");
+                        String dronetypeName = DroneApp.NameDrone(dronetypeUrl);
+                        String dronemanufacturer = DroneApp.manufacturerDrone(dronetypeUrl);
+                        table.getItems().add(new DroneApp.Drone(
+                                drone.getInt("id"),
+                                dronetypeName,
+                                dronemanufacturer,
+                                drone.getString("created"),
+                                drone.getString("serialnumber"),
+                                drone.getInt("carriage_weight"),
+                                drone.getString("carriage_type")));
+                    }
+                    
+
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }else {System.out.println("Invalid credentials");
+                showAutoClosingErrorPopup(primaryStage, "This is already the Last page", "ERROR", " Please try other page.");
+            }
+        });
+
+        Button btnPrevious = new Button("Previous");
+        btnPrevious.setOnAction(e -> {
+            if (offset - LIMIT >= 0) {
+                try {
+                    offset -= LIMIT;
+                    table.setPrefHeight(275);
+                    table.getItems().clear();
+                    api myApi1 = new api(endpoint, domain, token, agent);
+
+                    myApi1.createConnection("/api/drones/?limit=10" + "&offset=" + offset);
+                    String response1 = myApi1.retrieveResponse();
+
+                    JSONArray drones2 = new JSONObject(response1).getJSONArray("results");
+
+                    for (int i = 0; i < drones2.length(); i++) {
+                        JSONObject drone = drones2.getJSONObject(i);
+                        String dronetypeUrl = drone.getString("dronetype");
+                        String dronetypeName = DroneApp.NameDrone(dronetypeUrl);
+                        String dronemanufacturer = DroneApp.manufacturerDrone(dronetypeUrl);
+                        table.getItems().add(new DroneApp.Drone(
+                                drone.getInt("id"),
+                                dronetypeName,
+                                dronemanufacturer,
+                                drone.getString("created"),
+                                drone.getString("serialnumber"),
+                                drone.getInt("carriage_weight"),
+                                drone.getString("carriage_type")));
+                    }
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }
+                else {
+                    System.out.println("Invalid button, already at last page");
+                    showAutoClosingErrorPopup(primaryStage, "This is already the Last page", "ERROR", "Please try the previous page.");
+                }
+
+            });
+
+
+        Button btnLast = new Button("Last");
+        btnLast.setOnAction(e -> {
+
+            if (offset != MAX_OFFSET) {
+                try {
+                    table.getItems().clear();
+                    table.setPrefHeight(275);
+                    offset = 20;
+                    api myApi0 = new api(endpoint, domain, token, agent);
+
+                    myApi0.createConnection("/api/drones/?limit=10" + "&offset=" + offset);
+                    String response0 = myApi0.retrieveResponse();
+
+                    JSONArray drones3 = new JSONObject(response0).getJSONArray("results");
+
+                    for (int i = 0; i < drones3.length(); i++) {
+                        JSONObject drone = drones3.getJSONObject(i);
+                        String dronetypeUrl = drone.getString("dronetype");
+                        String dronetypeName = DroneApp.NameDrone(dronetypeUrl);
+                        String dronemanufacturer = DroneApp.manufacturerDrone(dronetypeUrl);
+                        table.getItems().add(new DroneApp.Drone(
+                                drone.getInt("id"),
+                                dronetypeName,
+                                dronemanufacturer,
+                                drone.getString("created"),
+                                drone.getString("serialnumber"),
+                                drone.getInt("carriage_weight"),
+                                drone.getString("carriage_type")));
+                    }
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }else {
+                System.out.println("Invalid botton last page already");
+                showAutoClosingErrorPopup(primaryStage, "This is already the Last page", "ERROR", " Please try the previous page.");
+            }
+
+        });
+
+        HBox nextButtonBox = new HBox(10, btnPrevious, btnNext, btnLast);
+        nextButtonBox.setAlignment(Pos.BOTTOM_LEFT);
+        nextButtonBox.setPadding(new Insets(20));
+
+        VBox vbox = new VBox(daschbord, table,nextButtonBox);
+        vbox.setSpacing(10);
+        vbox.setPadding(new Insets(10));
+
+        Scene historyScene = new Scene(vbox, 1300, 800);
+        primaryStage.centerOnScreen();
+        primaryStage.setScene(historyScene);
+        primaryStage.show();
+    }
+
+    private VBox createDashboardHistory (Stage primaryStage) {
+        Button btnMenu = createToolbarButton("Menu", "menu.png");
+        VBox menuItemsBox = new VBox(10);
+        menuItemsBox.setVisible(false);
+
+        btnMenu.setOnAction(event -> menuItemsBox.setVisible(!menuItemsBox.isVisible()));
+
+        Button btnLogout = createToolbarButton("Logout", "logout.png");
+        btnLogout.setOnAction(_ -> showLoginPage(primaryStage));
+
+        Button btnRefresh = createToolbarButton("Refresh", "refresh.png");
+        btnRefresh.setOnAction(_ -> {
+            showLoadingPopup();
+            try {
+                showHistoryPage(primaryStage);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+        });
+
+        Button btnBack = createToolbarButton("back", "back.png");
+        btnBack.setOnAction(_ -> {
+            showMenu(primaryStage);
+            primaryStage.centerOnScreen();
+        });
+
+        Button btnGame = createToolbarButton("Game", "game.png");
+        btnGame.setOnAction(e -> {
+            startGame(primaryStage);
+            primaryStage.centerOnScreen();
+        });
+
+        HBox hbox = new HBox(btnMenu, btnLogout, btnRefresh, btnBack,btnGame);
+        hbox.setAlignment(Pos.CENTER);
+        hbox.setSpacing(150);
+        hbox.setPadding(new Insets(5));
+
+        ToolBar toolbar = new ToolBar();
+        toolbar.setBackground(new Background(new BackgroundFill(Color.LIGHTBLUE, CornerRadii.EMPTY, Insets.EMPTY)));
+        toolbar.getItems().add(hbox);
+        toolbar.setOpacity(1.0);
+
+        menuItemsBox.getChildren().addAll(
+                createSubButton("Drone Flight Dynamic", primaryStage, event -> new ShowDynamic().showDynamicPage(primaryStage)),
+                createSubButton("Drone Catalogue", primaryStage, event -> new ShowCatalogue().showCataloguePage(primaryStage)),
+                createSubButton("Drone History", primaryStage, event -> new ShowHistory().showHistoryPage(primaryStage))
+        );
+
+        VBox vbox = new VBox(toolbar, menuItemsBox);
+        vbox.setSpacing(0);
+
+        return vbox;
+    }
+    public static Button createSubButton(String text, Stage primaryStage, SubButtonActionHandler actionHandler) {
+        Button button = new Button(text);
+        button.setStyle("-fx-background-color: lightblue; -fx-border-color: black; -fx-text-fill: black; -fx-font-size: 14px;");
+        button.setPadding(new Insets(0)); // Add padding inside the button
+        button.setMaxWidth(150); // Make the button stretch to fill width
+        button.setOnAction(_ -> {
+            try {
+                actionHandler.handle(primaryStage);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        return button;
+    }
+
+
+}

@@ -5,6 +5,18 @@ import javafx.beans.property.SimpleStringProperty;
 
 public class DroneTypeApp  {
 
+    /**
+     * The DroneTypeApp class defines a data model for representing properties of a drone type.
+     * It encapsulates attributes such as ID, manufacturer, typename, weight, max speed,
+     * battery capacity, control range, and max carriage weight.
+     * <p>
+     * This class is intended to be used as a data structure to hold information about different
+     * types of drones. It provides getter methods for accessing these properties.
+     * <p>
+     * Note: Instances of DroneType are intended to be used in conjunction with JavaFX's
+     * TableView or other UI components that require observable properties (SimpleIntegerProperty,
+     * SimpleStringProperty) for dynamic updates and bindings.
+     */
 
     public static class DroneType {
         private final SimpleIntegerProperty id;
@@ -60,3 +72,4 @@ public class DroneTypeApp  {
         }
     }
 }
+

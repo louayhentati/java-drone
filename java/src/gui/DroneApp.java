@@ -8,6 +8,26 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
+
+
+
+/**
+ * The DroneApp class interacts with an API to fetch drone data and provides utility methods
+ * for retrieving specific information about drones. It also defines a nested Drone class
+ * encapsulating drone attributes using JavaFX properties for easy integration with UI components.
+ * <p>
+ * The class includes methods for:
+ * - Initializing an API connection with authentication.
+ * - Fetching data from a specified API endpoint.
+ * -NameDrone: Extracting drone type from a given drone type URL.
+ * manufacturerDrone: Extracting drone manufacturer from a given drone type URL.
+ * <p>
+ * The nested Drone class represents a drone entity with attributes
+ * <p>
+ * External dependencies include an API wrapper (api) for making HTTP requests and handling JSON responses.
+ * The API endpoint and authentication details are specified within the initializeApi method.
+
+ */
     public class DroneApp {
 
         private static api initializeApi(String endpoint) {

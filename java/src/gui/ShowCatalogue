@@ -1,22 +1,22 @@
 package gui;
 
 import API.api;
+import error.ErrorHandler;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
-import javafx.scene.control.ToolBar;
+import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import org.json.JSONArray;
 import org.json.JSONObject;
+
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
+
 import static Animation.LoadingTask.showLoadingPopup;
 import static gui.DroneSimulatorGUI.*;
 
@@ -66,16 +66,16 @@ public class ShowCatalogue {
         table.getColumns().addAll(idColumn, manufacturerColumn, typenameColumn, weightColumn, maxSpeedColumn, batteryCapacityColumn, controlRangeColumn, maxCarriageColumn);
 
         // Set preferred column widths for better spacing
-        idColumn.setPrefWidth(50);
+        idColumn.setPrefWidth(60);
         manufacturerColumn.setPrefWidth(200);
-        typenameColumn.setPrefWidth(200);
-        weightColumn.setPrefWidth(100);
-        maxSpeedColumn.setPrefWidth(150);
+        typenameColumn.setPrefWidth(300);
+        weightColumn.setPrefWidth(160);
+        maxSpeedColumn.setPrefWidth(155);
         batteryCapacityColumn.setPrefWidth(150);
         controlRangeColumn.setPrefWidth(150);
-        maxCarriageColumn.setPrefWidth(150);
+        maxCarriageColumn.setPrefWidth(100);
 
-        table.setPrefHeight(500);
+        table.setPrefHeight(510);
         // Set initial sorting by ID column
         idColumn.setSortType(TableColumn.SortType.ASCENDING);
         table.getSortOrder().add(idColumn);
@@ -87,7 +87,7 @@ public class ShowCatalogue {
                 // Apply sorting once data is fetched
 
             } catch (IOException e) {
-                e.printStackTrace();
+                ErrorHandler.handleException(e);
             }
         });
 
@@ -135,33 +135,59 @@ public class ShowCatalogue {
     }
 
     private  VBox createDashboardCatalogue(Stage primaryStage) {
-        Button btnMenu = createToolbarButton("Menu", "menu.png");
-        VBox menuItemsBox = new VBox(10);
-        menuItemsBox.setVisible(false);
+        MenuButton btnMenu = setMenuButtonGraphics("Menu", "/image/menu.png");
 
-        btnMenu.setOnAction(_ -> menuItemsBox.setVisible(!menuItemsBox.isVisible()));
+        MenuItem dynamicItem = new MenuItem("Drone Dynamic");
+        styleMenuItem(dynamicItem);
+        dynamicItem.setOnAction(event -> new ShowDynamic().showDynamicPage(primaryStage));
 
-        Button btnLogout = createToolbarButton("Logout", "logout.png");
-        btnLogout.setOnAction(_ -> showLoginPage(primaryStage));
 
-        Button btnRefresh = createToolbarButton("Refresh", "refresh.png");
-        btnRefresh.setOnAction(_ -> {
+        MenuItem catalogueItem = new MenuItem("Drone Catalogue");
+        styleMenuItem(catalogueItem);
+        catalogueItem.setOnAction(event -> {
+            try {
+                new ShowCatalogue().showCataloguePage(primaryStage);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+
+        MenuItem historyItem = new MenuItem("Drone History");
+        styleMenuItem(historyItem);
+        historyItem.setOnAction(event -> {
+            try {
+                new ShowHistory().showHistoryPage(primaryStage);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+
+        btnMenu.getItems().addAll(dynamicItem, catalogueItem, historyItem);
+
+
+        Button btnLogout = createToolbarButton("Logout", "/image/Logout.png");
+        btnLogout.setOnAction(event -> showLoginPage(primaryStage));
+
+        Button btnRefresh = createToolbarButton("Refresh", "/image/refresh.png");
+        btnRefresh.setOnAction(event -> {
             showLoadingPopup();
             try {
                 showCataloguePage(primaryStage);
                 primaryStage.centerOnScreen();
             } catch (IOException e) {
-                e.printStackTrace();
+                ErrorHandler.handleException(e);
             }
         });
 
-        Button btnBack = createToolbarButton("back", "back.png");
-        btnBack.setOnAction(_ -> {
+        Button btnBack = createToolbarButton("back", "/image/back.png");
+        btnBack.setOnAction(event -> {
             primaryStage.centerOnScreen();
             DroneSimulatorGUI.showMenu(primaryStage);
         });
 
-        Button btnGame = createToolbarButton("Game", "game.png");
+        Button btnGame = createToolbarButton("Game", "/image/game.png");
         btnGame.setOnAction(e -> {
             startGame(primaryStage);
             primaryStage.centerOnScreen();
@@ -177,21 +203,12 @@ public class ShowCatalogue {
         toolbar.getItems().add(hbox);
         toolbar.setOpacity(1.0);
 
-        menuItemsBox.getChildren().addAll(
-                createSubButton("Drone Flight Dynamic", primaryStage, _ -> new ShowDynamic().showDynamicPage(primaryStage)),
-                createSubButton("Drone Catalogue", primaryStage, _ -> new ShowCatalogue().showCataloguePage(primaryStage)),
-                createSubButton("Drone History", primaryStage, _ -> new ShowHistory().showHistoryPage(primaryStage))
-        );
 
-
-        VBox vbox = new VBox(toolbar, menuItemsBox);
+        VBox vbox = new VBox(toolbar);
         vbox.setSpacing(0);
 
         return vbox;
     }
 
-    public static Button createSubButton(String text, Stage primaryStage, SubButtonActionHandler actionHandler) {
-        return ShowHistory.createSubButton(text, primaryStage, actionHandler);
-    }
 
 }

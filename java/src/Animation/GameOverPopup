@@ -8,6 +8,7 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+
 import static gui.DroneSimulatorGUI.createToolbarButton;
 import static gui.DroneSimulatorGUI.showMenu;
 
@@ -41,13 +42,13 @@ public class GameOverPopup {
 
         Label noobLabel = score <= 2 ? new Label("You are a Noob! Score: " + score) : new Label();
 
-        Button repeatButton = createToolbarButton("Repeat", "refresh.png");
+        Button repeatButton = createToolbarButton("Repeat", "/image/refresh.png");
         repeatButton.setOnAction(e -> {
             restartGame.run();
             window.close();
         });
 
-        Button menuButton = createToolbarButton("Menu", "menu.png");
+        Button menuButton = createToolbarButton("Menu", "/image/menu.png");
         menuButton.setOnAction(e -> {
             showMenu(primaryStage);
             primaryStage.centerOnScreen();

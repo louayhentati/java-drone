@@ -3,6 +3,15 @@ package Login;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * The LoginManager class handles user authentication by validating credentials.
+ * It includes predefined credentials for a specific group and validates user inputs
+ * against these credentials.
+ * Responsibilities:
+ * Stores predefined credentials for users.
+ * Validates input credentials against stored credentials.
+ */
+
 public class LoginManager {
     private static class Credentials {
         String username;
@@ -22,7 +31,6 @@ public class LoginManager {
         credentialsMap.put("Hamza", new Credentials("Hamza", "pass2"));
         credentialsMap.put("Yasir", new Credentials("Yasir", "pass3"));
         credentialsMap.put("Mohamed", new Credentials("Mohamed", "pass4"));
-        credentialsMap.put("", new Credentials("", ""));
     }
 
     public boolean validate(String group, String username, String password) {

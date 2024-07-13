@@ -69,23 +69,48 @@ public class DroneSimulatorGUI extends Application {
     }
 
     private static VBox createDashboard(Stage primaryStage) {
-        Button btnMenu = createToolbarButton("Menu", "menu.png");
-        VBox menuItemsBox = new VBox(10); // VBox to hold the submenu items
-        menuItemsBox.setVisible(false); // Initially hidden
+        MenuButton btnMenu = setMenuButtonGraphics("Menu", "/image/menu.png");
 
-        btnMenu.setOnAction(event -> menuItemsBox.setVisible(!menuItemsBox.isVisible())); // Toggle visibility
+        MenuItem dynamicItem = new MenuItem("Drone Dynamic");
+        styleMenuItem(dynamicItem);
+        dynamicItem.setOnAction(event -> new ShowDynamic().showDynamicPage(primaryStage));
 
-        Button btnLogout = createToolbarButton("Logout", "logout.png");
-        btnLogout.setOnAction(e-> showLoginPage(primaryStage));
 
-        Button btnRefresh = createToolbarButton("Refresh", "refresh.png");
-        btnRefresh.setOnAction(e -> {
-            showLoadingPopup();
-            showMenu(primaryStage);
-            primaryStage.centerOnScreen();
+        MenuItem catalogueItem = new MenuItem("Drone Catalogue");
+        styleMenuItem(catalogueItem);
+        catalogueItem.setOnAction(event -> {
+            try {
+                new ShowCatalogue().showCataloguePage(primaryStage);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         });
 
-        Button btnGame = createToolbarButton("Game", "game.png");
+
+        MenuItem historyItem = new MenuItem("Drone History");
+        styleMenuItem(historyItem);
+        historyItem.setOnAction(event -> {
+            try {
+                new ShowHistory().showHistoryPage(primaryStage);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+
+        btnMenu.getItems().addAll(dynamicItem, catalogueItem, historyItem);
+
+        Button btnLogout = createToolbarButton("Logout", "/image/Logout.png");
+        btnLogout.setOnAction(e-> showLoginPage(primaryStage));
+
+        Button btnRefresh = createToolbarButton("Refresh", "/image/refresh.png");
+        btnRefresh.setOnAction(e -> {
+            showLoadingPopup();
+            primaryStage.centerOnScreen();
+            showMenu(primaryStage);
+        });
+
+        Button btnGame = createToolbarButton("Game", "/image/game.png");
         btnGame.setOnAction(e -> {
                 startGame(primaryStage);
         primaryStage.centerOnScreen();
@@ -103,14 +128,9 @@ public class DroneSimulatorGUI extends Application {
         toolbar.getItems().add(hbox);
         toolbar.setOpacity(1.0); // Set opacity of the toolbar
 
-        menuItemsBox.getChildren().addAll(
-                createSubButton("Drone Flight Dynamic", primaryStage, event -> new ShowDynamic().showDynamicPage(primaryStage)),
-                createSubButton("Drone Catalogue", primaryStage, event -> new ShowCatalogue().showCataloguePage(primaryStage)),
-                createSubButton("Drone History", primaryStage, event -> new ShowHistory().showHistoryPage(primaryStage))
-        );
 
         // Add the VBox to the VBox containing the toolbar
-        VBox vbox = new VBox(toolbar, menuItemsBox);
+        VBox vbox = new VBox(toolbar);
         vbox.setSpacing(10); // Add some space between toolbar and submenu items
 
         return vbox;
@@ -123,6 +143,30 @@ public class DroneSimulatorGUI extends Application {
         }
         return hostServices;
     }
+    public static MenuButton setMenuButtonGraphics(String text, String imagePath) {
+        MenuButton menuButton = new MenuButton(text);
+        menuButton.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; -fx-text-fill: black; -fx-font-size: 14px;");
+        menuButton.setGraphicTextGap(10); // Set gap between text and image
+        menuButton.setPadding(new Insets(5)); // Add padding inside the button
+
+        // Load images
+        InputStream inputStream = DroneSimulatorGUI.class.getResourceAsStream(imagePath);
+        if (inputStream == null) {
+            throw new IllegalArgumentException("Image not found: " + imagePath);
+        }
+        Image image = new Image(inputStream);
+        ImageView imageView = new ImageView(image);
+        imageView.setFitWidth(30);
+        imageView.setFitHeight(30);
+        imageView.setPreserveRatio(true);
+        imageView.setSmooth(true);
+        menuButton.setGraphic(imageView);
+        return menuButton;
+    }
+
+    static void styleMenuItem(MenuItem menuItem) {
+        menuItem.setStyle("-fx-background-color: lightblue; -fx-text-fill: black; -fx-font-size: 14px;");
+    }
 
     public static Button createToolbarButton(String text, String imagePath) {
         Button button = new Button(text);
@@ -130,13 +174,7 @@ public class DroneSimulatorGUI extends Application {
         button.setGraphicTextGap(10); // Set gap between text and image
         button.setPadding(new Insets(5)); // Add padding inside the button
 
-        // Load images
-        InputStream inputStream = DroneSimulatorGUI.class.getResourceAsStream("/image/" + imagePath);
-        if (inputStream == null) {
-            throw new IllegalArgumentException("Image not found:" + imagePath);
-        }
-        Image image = new Image(inputStream);
-        ImageView imageView = new ImageView(image);
+        ImageView imageView = new ImageView(new Image(imagePath));
         imageView.setFitWidth(30);
         imageView.setFitHeight(30);
         imageView.setPreserveRatio(true);

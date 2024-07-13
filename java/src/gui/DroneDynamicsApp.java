@@ -5,7 +5,10 @@ import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
 import org.json.JSONObject;
+
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * The DroneDynamicsApp class provides methods for interacting with an API to retrieve
@@ -110,8 +113,13 @@ public class DroneDynamicsApp  {
         }
 
         public String getTimestamp() {
+            LocalDateTime dateTime = LocalDateTime.parse(timestamp.get(), DateTimeFormatter.ISO_DATE_TIME);
 
-           return timestamp.get();
+            // Define a date-time formatter with the desired format
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MMMM-dd    HH : mm : ss . SSSSSS");
+
+            // Format the current date-time and return the formatted string
+            return dateTime.format(formatter);
         }
 
         public int getSpeed() {
@@ -143,7 +151,13 @@ public class DroneDynamicsApp  {
         }
 
         public String getLastSeen() {
-            return lastSeen.get();
+            LocalDateTime dateTime = LocalDateTime.parse(lastSeen.get(), DateTimeFormatter.ISO_DATE_TIME);
+
+            // Define a date-time formatter with the desired format
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MMMM-dd     HH : mm : ss . SSSSSS");
+
+            // Format the current date-time and return the formatted string
+            return dateTime.format(formatter);
         }
 
         public String getStatus() {
